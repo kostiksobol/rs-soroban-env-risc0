@@ -53,6 +53,9 @@ ark-serialize = { version = "0.5.0"}
 ark-ff = { version = "0.5.0"}
 ark-ec = { version = "0.5.0"}
 
+risc0-zkvm = { version = "3.0.5", default-features = false, features = ["std", "disable-dev-mode"] }
+postcard = { version = "1.1.1", features = ["alloc"] }
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "0.17.0", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 

@@ -3123,7 +3123,70 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components.
-    fn verify_sig_ed25519(
+    
+fn risc0_verify(
+    &self,
+    _vmcaller: &mut VmCaller<Host>,
+    receipt: BytesObject,
+    image_id: BytesObject,
+) -> Result<BytesObject, HostError> {
+    let receipt_bytes: Vec<u8> =
+        self.visit_obj(receipt, |b: &ScBytes| Ok(b.as_slice().to_vec()))?;
+
+    let image_id_words: [u32; 8] = self.visit_obj(image_id, |b: &ScBytes| {
+        let bytes = b.as_slice();
+
+        if bytes.len() != 32 {
+            return Err(self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "risc0_verify: image_id must be exactly 32 bytes",
+                &[],
+            ));
+        }
+
+        let mut words = [0u32; 8];
+
+        for i in 0..8 {
+            let j = i * 4;
+            words[i] = u32::from_le_bytes([
+                bytes[j],
+                bytes[j + 1],
+                bytes[j + 2],
+                bytes[j + 3],
+            ]);
+        }
+
+        Ok(words)
+    })?;
+
+    self.charge_budget(
+        ContractCostType::Bn254Pairing,
+        Some(receipt_bytes.len() as u64),
+    )?;
+
+    let receipt: risc0_zkvm::Receipt = postcard::from_bytes(&receipt_bytes).map_err(|_| {
+        self.err(
+            ScErrorType::Crypto,
+            ScErrorCode::InvalidInput,
+            "risc0_verify: invalid postcard receipt bytes",
+            &[],
+        )
+    })?;
+
+    receipt.verify(image_id_words).map_err(|_| {
+        self.err(
+            ScErrorType::Crypto,
+            ScErrorCode::InvalidInput,
+            "risc0_verify: receipt verification failed",
+            &[],
+        )
+    })?;
+
+    self.add_host_object(self.scbytes_from_vec(receipt.journal.bytes)?)
+}
+
+fn verify_sig_ed25519(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: BytesObject,
